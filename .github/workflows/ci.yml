@@ -46,9 +46,33 @@ jobs:
         if: startsWith(matrix.os, 'windows')
         run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
 
+      - name: Install OpenSSL
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          if (-not (Test-Path "C:/Program Files/OpenSSL")) {
+            if (Get-Command choco -ErrorAction SilentlyContinue) {
+              choco install openssl -y
+            } elseif (Get-Command winget -ErrorAction SilentlyContinue) {
+              winget install --id ShiningLight.OpenSSL --accept-source-agreements --accept-package-agreements
+            } else {
+              throw "Neither choco nor winget found to install OpenSSL"
+            }
+          }
+
       - name: Set OPENSSL_ROOT_DIR
         if: startsWith(matrix.os, 'windows')
-        run: echo "OPENSSL_ROOT_DIR=C:/Program Files/OpenSSL" >> $env:GITHUB_ENV
+        run: |
+          $opensslRoot = "C:/Program Files/OpenSSL"
+          echo "OPENSSL_ROOT_DIR=$opensslRoot" >> $env:GITHUB_ENV
+          # Find the actual library directory (Chocolatey puts it in lib/VC/x64/MD or similar)
+          $libcrypto = Get-ChildItem -Path $opensslRoot -Recurse -Filter "libcrypto.lib" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($libcrypto) {
+            $libDir = $libcrypto.DirectoryName
+            echo "OPENSSL_LIB_DIR=$libDir" >> $env:GITHUB_ENV
+            echo "Found OpenSSL lib at: $libDir"
+          } else {
+            echo "Warning: libcrypto.lib not found under $opensslRoot"
+          }
 
       - name: Set OPENSSL_ROOT_DIR
         if: startsWith(matrix.os, 'macos')
